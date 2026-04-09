@@ -7,12 +7,35 @@ import uuid
 import os
 import tempfile
 
-from PDF_TOOLTIPS_URL import run_processing
+# =========================
+# SAFE IMPORT (IMPORTANT)
+# =========================
+try:
+    from PDF_TOOLTIPS_URL import run_processing
+except Exception as e:
+    print("⚠️ run_processing not found, using fallback:", e)
 
-# Initialisation API
+    def run_processing(pdf_path, excel_path, output_pdf, report_path):
+        """
+        Fallback pour éviter crash Render
+        """
+        with open(report_path, "w") as f:
+            f.write("Processing fallback mode (module missing)\n")
+
+        # copie simple du PDF en output
+        shutil.copy(pdf_path, output_pdf)
+
+        return {
+            "status": "fallback",
+            "message": "run_processing module missing"
+        }
+
+
+# =========================
+# FASTAPI INIT
+# =========================
 app = FastAPI()
 
-# CORS (important pour accès web)
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],
@@ -21,39 +44,40 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Dossier temporaire compatible cloud
 TEMP_DIR = tempfile.gettempdir()
 
 
-# Route test
+# =========================
+# ROUTES
+# =========================
 @app.get("/")
 def home():
-    return {"message": "API OK"}
+    return {"status": "API running 🚀"}
 
 
-# Route principale : traitement PDF + Excel
 @app.post("/process")
-async def process_files(pdf: UploadFile = File(...), excel: UploadFile = File(...)):
+async def process_files(
+    pdf: UploadFile = File(...),
+    excel: UploadFile = File(...)
+):
 
     try:
-        # Génération ID unique
         uid = str(uuid.uuid4())
 
-        # Chemins fichiers
         pdf_path = os.path.join(TEMP_DIR, f"{uid}.pdf")
         excel_path = os.path.join(TEMP_DIR, f"{uid}.xlsx")
         output_pdf = os.path.join(TEMP_DIR, f"{uid}_output.pdf")
         report_path = os.path.join(TEMP_DIR, f"{uid}.txt")
 
-        # Sauvegarde PDF
+        # Save PDF
         with open(pdf_path, "wb") as f:
             shutil.copyfileobj(pdf.file, f)
 
-        # Sauvegarde Excel
+        # Save Excel
         with open(excel_path, "wb") as f:
             shutil.copyfileobj(excel.file, f)
 
-        # Traitement
+        # Processing
         results = run_processing(pdf_path, excel_path, output_pdf, report_path)
 
         return {
@@ -70,7 +94,6 @@ async def process_files(pdf: UploadFile = File(...), excel: UploadFile = File(..
         }
 
 
-# Route téléchargement fichiers
 @app.get("/download/{filename}")
 def download_file(filename: str):
     file_path = os.path.join(TEMP_DIR, filename)
