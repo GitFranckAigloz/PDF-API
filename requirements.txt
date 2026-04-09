@@ -3,3 +3,4 @@ uvicorn
 pymupdf
 pandas
 openpyxl
+python-multipart
