@@ -7,6 +7,9 @@ import uuid
 import os
 import tempfile
 
+# =========================
+# SAFE IMPORT
+# =========================
 try:
     from PDF_TOOLTIPS_URL import run_processing
 except Exception:
@@ -16,29 +19,51 @@ except Exception:
 
         shutil.copy(pdf_path, output_pdf)
 
-        return {"status": "fallback"}
+        return {
+            "status": "fallback",
+            "pages": 0,
+            "items": 0
+        }
 
 
+# =========================
+# INIT APP
+# =========================
 app = FastAPI()
 
+# =========================
+# CORS FIX (IMPORTANT)
+# =========================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # en prod → mettre ton domaine
-    allow_credentials=True,
+    allow_origins=[
+        "http://localhost:5500",
+        "http://127.0.0.1:5500",
+        "null"  # pour fichier HTML local (file://)
+    ],
+    allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-TEMP_DIR = "/tmp"  # important pour Render
-
+# =========================
+# CONFIG
+# =========================
+TEMP_DIR = "/tmp"
 BASE_URL = "https://pdf-api-oj86.onrender.com"
 
 
+# =========================
+# HEALTH CHECK
+# =========================
 @app.get("/")
 def home():
     return {"status": "API running 🚀"}
 
 
+# =========================
+# PROCESS FILES
+# =========================
 @app.post("/process")
 async def process_files(
     pdf: UploadFile = File(...),
@@ -53,18 +78,22 @@ async def process_files(
     output_pdf = os.path.join(TEMP_DIR, f"{uid}_output.pdf")
     report_path = os.path.join(TEMP_DIR, f"{uid}.txt")
 
-    # Save files
+    # Save uploads
     with open(pdf_path, "wb") as f:
         shutil.copyfileobj(pdf.file, f)
 
     with open(excel_path, "wb") as f:
         shutil.copyfileobj(excel.file, f)
 
-    # Processing
+    # Process
     results = run_processing(pdf_path, excel_path, output_pdf, report_path)
 
+    # Safety check
     if not os.path.exists(output_pdf):
-        return {"status": "error", "message": "Output PDF not generated"}
+        return {
+            "status": "error",
+            "message": "Output PDF not generated"
+        }
 
     return {
         "status": "success",
@@ -75,11 +104,15 @@ async def process_files(
     }
 
 
+# =========================
+# DOWNLOAD FILES
+# =========================
 @app.get("/download/{filename}")
 def download_file(filename: str):
+
     file_path = os.path.join(TEMP_DIR, filename)
 
     if not os.path.exists(file_path):
-        return {"error": "Fichier introuvable"}
+        return {"status": "error", "message": "Fichier introuvable"}
 
     return FileResponse(file_path)
