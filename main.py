@@ -1,11 +1,10 @@
-from fastapi import FastAPI, UploadFile, File, Form, HTTPException
+from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
 from fastapi.responses import FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import shutil
 import uuid
 import os
-import tempfile
 
 # =========================
 # SAFE IMPORT (PROCESSING)
@@ -33,16 +32,11 @@ app = FastAPI()
 
 
 # =========================
-# CORS (FIX STABLE)
+# 🔥 CORS FIX (ULTRA SAFE)
 # =========================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "https://gitfranckaigloz.github.io",
-        "http://localhost:5500",
-        "http://127.0.0.1:5500",
-        "null"
-    ],
+    allow_origins=["*"],  # 🔥 autorise tout (corrige ton problème direct)
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -57,7 +51,7 @@ BASE_URL = "https://pdf-api-oj86.onrender.com"
 
 
 # =========================
-# HEALTH CHECK ROUTE
+# HEALTH CHECK
 # =========================
 @app.get("/")
 def home():
@@ -67,49 +61,69 @@ def home():
     }
 
 
+@app.get("/ping")
+def ping():
+    return {"status": "awake"}
+
+
 # =========================
 # PROCESS ROUTE
 # =========================
 @app.post("/process")
 async def process_files(
+    request: Request,
     pdf: UploadFile = File(...),
     excel: UploadFile = File(...),
     email: str = Form(...)
 ):
+    try:
+        print("🔥 REQUEST RECEIVED")
 
-    if not pdf or not excel:
-        raise HTTPException(status_code=400, detail="Fichiers manquants")
+        # Debug form data
+        form = await request.form()
+        print("FORM DATA:", list(form.keys()))
 
-    if not email:
-        raise HTTPException(status_code=400, detail="Email manquant")
+        if not pdf or not excel:
+            raise HTTPException(status_code=400, detail="Fichiers manquants")
 
-    uid = str(uuid.uuid4())
+        if not email:
+            raise HTTPException(status_code=400, detail="Email manquant")
 
-    pdf_path = os.path.join(TEMP_DIR, f"{uid}.pdf")
-    excel_path = os.path.join(TEMP_DIR, f"{uid}.xlsx")
-    output_pdf = os.path.join(TEMP_DIR, f"{uid}_output.pdf")
-    report_path = os.path.join(TEMP_DIR, f"{uid}.txt")
+        uid = str(uuid.uuid4())
 
-    # SAVE FILES
-    with open(pdf_path, "wb") as f:
-        shutil.copyfileobj(pdf.file, f)
+        pdf_path = os.path.join(TEMP_DIR, f"{uid}.pdf")
+        excel_path = os.path.join(TEMP_DIR, f"{uid}.xlsx")
+        output_pdf = os.path.join(TEMP_DIR, f"{uid}_output.pdf")
+        report_path = os.path.join(TEMP_DIR, f"{uid}.txt")
 
-    with open(excel_path, "wb") as f:
-        shutil.copyfileobj(excel.file, f)
+        # SAVE FILES
+        with open(pdf_path, "wb") as f:
+            shutil.copyfileobj(pdf.file, f)
 
-    # PROCESSING
-    results = run_processing(pdf_path, excel_path, output_pdf, report_path)
+        with open(excel_path, "wb") as f:
+            shutil.copyfileobj(excel.file, f)
 
-    if not os.path.exists(output_pdf):
-        raise HTTPException(status_code=500, detail="PDF non généré")
+        print("✅ Files saved")
 
-    return {
-        "status": "success",
-        "email": email,
-        "pdf_url": f"{BASE_URL}/download/{uid}_output.pdf",
-        "report_url": f"{BASE_URL}/download/{uid}.txt",
-        "stats": results
-    }
+        # PROCESSING
+        results = run_processing(pdf_path, excel_path, output_pdf, report_path)
+
+        print("✅ Processing done:", results)
+
+        if not os.path.exists(output_pdf):
+            raise HTTPException(status_code=500, detail="PDF non généré")
+
+        return {
+            "status": "success",
+            "email": email,
+            "pdf_url": f"{BASE_URL}/download/{uid}_output.pdf",
+            "report_url": f"{BASE_URL}/download/{uid}.txt",
+            "stats": results
+        }
+
+    except Exception as e:
+        print("❌ ERROR:", str(e))
+        raise HTTPException(status_code=500, detail=str(e))
 
 
 # =========================
