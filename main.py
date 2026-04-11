@@ -1,5 +1,5 @@
 from fastapi import FastAPI, UploadFile, File, Form, HTTPException, Request
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 
 import shutil
@@ -24,31 +24,34 @@ except Exception:
             "items": 0
         }
 
-
 # =========================
 # APP INIT
 # =========================
 app = FastAPI()
 
-
 # =========================
-# 🔥 CORS FIX (ULTRA SAFE)
+# 🔥 CORS FIX (PROPRE)
 # =========================
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # 🔥 autorise tout (corrige ton problème direct)
+    allow_origins=["*"],  # tu pourras restreindre plus tard
     allow_credentials=False,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
+# =========================
+# 🔥 PREFLIGHT FIX (CRITIQUE)
+# =========================
+@app.options("/{full_path:path}")
+async def preflight_handler(full_path: str):
+    return JSONResponse(content={"status": "ok"})
 
 # =========================
 # CONFIG
 # =========================
 TEMP_DIR = "/tmp"
 BASE_URL = "https://pdf-api-oj86.onrender.com"
-
 
 # =========================
 # HEALTH CHECK
@@ -60,11 +63,9 @@ def home():
         "routes": ["/process", "/download/{filename}"]
     }
 
-
 @app.get("/ping")
 def ping():
     return {"status": "awake"}
-
 
 # =========================
 # PROCESS ROUTE
@@ -79,7 +80,6 @@ async def process_files(
     try:
         print("🔥 REQUEST RECEIVED")
 
-        # Debug form data
         form = await request.form()
         print("FORM DATA:", list(form.keys()))
 
@@ -124,7 +124,6 @@ async def process_files(
     except Exception as e:
         print("❌ ERROR:", str(e))
         raise HTTPException(status_code=500, detail=str(e))
-
 
 # =========================
 # DOWNLOAD ROUTE
